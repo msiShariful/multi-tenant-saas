@@ -42,6 +42,10 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "User administration", description = "Tenant-scoped identity management (TENANT_ADMIN only)")
+// Declared on the class because it is true of every operation here and of nothing else in the service:
+// these are the only endpoints behind a role check, so they are the only ones that can refuse an
+// authenticated caller.
+@ApiResponse(responseCode = "403", description = "Authenticated, but not a TENANT_ADMIN")
 public class UserAdminController {
 
     private final UserAccountService userAccountService;

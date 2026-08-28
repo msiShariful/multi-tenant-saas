@@ -251,6 +251,17 @@ Branch on `code`; `detail` is prose and may be reworded. Validation failures add
 different error shapes. `ProblemDetailAuthenticationHandlers` routes them back through the MVC exception
 resolver, so there is exactly one.
 
+The shape is documented, not just implemented. `ProblemResponseCustomizer` attaches the `ApiError` schema to
+every 4xx/5xx in the OpenAPI document, and adds the responses that are true of an operation by construction —
+401 wherever a token is required, 400 wherever there is a body to validate. Applying that to the assembled
+document rather than to twenty individual methods means a new endpoint cannot ship undocumented errors by
+forgetting an annotation.
+
+`ApiError` is a documentation model only — nothing constructs it, because errors are real `ProblemDetail`
+instances whose extension members live in an untyped property map no schema generator can see. That invites
+drift, so `ProblemDetailContractTest` provokes a real failure per handler branch and fails the build if any
+response carries a member `ApiError` does not declare.
+
 ### Security decisions
 
 | Decision | Reasoning |
