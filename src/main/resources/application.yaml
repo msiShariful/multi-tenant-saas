@@ -96,10 +96,13 @@ tenantbase:
       # Long, and safe to be long, because refresh tokens are server-side rows that can be revoked instantly.
       refresh-token-ttl: ${JWT_REFRESH_TTL:30d}
       key-id: ${JWT_KEY_ID:tenantbase-auth-key}
-      # Unset in development: an ephemeral key pair is generated at startup with a loud warning.
-      # Generate real ones with the openssl commands in the README and mount them read-only.
-      private-key-location: ${JWT_PRIVATE_KEY_LOCATION:#{null}}
-      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:#{null}}
+      # private-key-location / public-key-location are intentionally absent. Left unset, the service
+      # generates an ephemeral key pair at startup and logs a loud warning; that keeps first-run and CI
+      # zero-config. Supply them for anything real -- either uncomment here or set the environment variables
+      #   TENANTBASE_SECURITY_JWT_PRIVATE_KEY_LOCATION=file:/run/secrets/jwt/app.key
+      #   TENANTBASE_SECURITY_JWT_PUBLIC_KEY_LOCATION=file:/run/secrets/jwt/app.pub
+      # (Declaring them here with a ${VAR:#{null}} default does not work: the placeholder resolves to the
+      # literal string "#{null}", which then fails to load as a Resource.)
     login:
       max-failed-attempts: ${LOGIN_MAX_ATTEMPTS:5}
       lockout-duration: ${LOGIN_LOCKOUT:15m}
