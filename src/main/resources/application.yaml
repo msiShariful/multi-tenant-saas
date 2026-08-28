@@ -12,7 +12,8 @@ spring:
       # database has capacity for is not throughput, it is a queue that fails later and less clearly.
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: 2
-      connection-timeout: 10s
+      # Hikari takes raw milliseconds here, not a Spring Duration.
+      connection-timeout: 10000
 
   jpa:
     # Flyway owns the schema. `validate` makes a drift between the entities and the migrations fail at
