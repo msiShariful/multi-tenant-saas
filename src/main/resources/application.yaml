@@ -1,3 +1,113 @@
 spring:
   application:
     name: auth-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tenantbase_auth}
+    username: ${DB_USERNAME:tenantbase}
+    password: ${DB_PASSWORD:tenantbase}
+    hikari:
+      pool-name: auth-service-pool
+      # Sized for a service that holds connections only for the length of a transaction. More pool than the
+      # database has capacity for is not throughput, it is a queue that fails later and less clearly.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 10s
+
+  jpa:
+    # Flyway owns the schema. `validate` makes a drift between the entities and the migrations fail at
+    # startup, which is the only moment it is cheap to notice.
+    hibernate:
+      ddl-auto: validate
+    # Off deliberately. Open-session-in-view holds a connection for the whole request including response
+    # rendering, hides lazy loading in the view layer, and -- specific to this service -- would bind a
+    # persistence context to the thread before TenantScope could establish the right tenant on it.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 25
+        # Surfaces N+1s in the log rather than in production latency.
+        generate_statistics: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Refuse to run against a database whose history does not match these migrations.
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+  threads:
+    virtual:
+      # Java 21 virtual threads: request handling here is dominated by blocking JDBC and bcrypt, so a
+      # platform thread per request is mostly a parked thread.
+      enabled: true
+
+  docker:
+    compose:
+      # Development convenience only: `mvn spring-boot:run` starts the database from the infra-only compose
+      # file. compose.yaml runs the whole stack including this service, so pointing at it here would recurse.
+      file: compose-dev.yaml
+      lifecycle-management: start-only
+
+server:
+  port: ${SERVER_PORT:8081}
+  # Behind the gateway, X-Forwarded-* headers decide the client IP recorded against refresh tokens. `framework`
+  # lets Spring apply them; reading the header directly in application code would trust anything a caller sends.
+  forward-headers-strategy: framework
+  error:
+    # Errors are produced by GlobalExceptionHandler as RFC 9457 problem+json; the servlet error page is a
+    # fallback that should never be reachable, and must not leak a stack trace if it is.
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health and info only. `*` on an internal port is still one misconfigured ingress away from
+        # publishing /actuator/env and every property in it, credentials included.
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+tenantbase:
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:http://localhost:8081}
+      audience: ${JWT_AUDIENCE:tenantbase-api}
+      # Short, because an access token cannot be revoked: this window is how long a disabled user or a
+      # removed role stays effective. Long enough to keep refresh traffic modest, short enough to bound damage.
+      access-token-ttl: ${JWT_ACCESS_TTL:15m}
+      # Long, and safe to be long, because refresh tokens are server-side rows that can be revoked instantly.
+      refresh-token-ttl: ${JWT_REFRESH_TTL:30d}
+      key-id: ${JWT_KEY_ID:tenantbase-auth-key}
+      # Unset in development: an ephemeral key pair is generated at startup with a loud warning.
+      # Generate real ones with the openssl commands in the README and mount them read-only.
+      private-key-location: ${JWT_PRIVATE_KEY_LOCATION:#{null}}
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:#{null}}
+    login:
+      max-failed-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+      lockout-duration: ${LOGIN_LOCKOUT:15m}
+
+logging:
+  level:
+    root: INFO
+    com.islamshariful.authservice: ${LOG_LEVEL:INFO}
+  pattern:
+    # tenantId and userId are put on the MDC by TenantContextFilter, so every line logged while serving a
+    # request says which tenant it was for -- the first question asked about any production incident here.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{tenantId:-no-tenant}/%X{userId:-anonymous}] %logger{36} - %msg%n"
