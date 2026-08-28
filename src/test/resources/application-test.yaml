@@ -1,0 +1,27 @@
+spring:
+  docker:
+    compose:
+      # Tests bring their own Postgres via Testcontainers; without this, spring-boot-docker-compose
+      # would also try to start compose-dev.yaml and fight it for port 5432.
+      enabled: false
+  jpa:
+    show-sql: false
+
+tenantbase:
+  security:
+    jwt:
+      issuer: http://auth-service.test
+      audience: tenantbase-api-test
+      access-token-ttl: 15m
+      refresh-token-ttl: 7d
+      key-id: test-key
+    login:
+      # Lower than production so the lockout test does not need six requests to prove the point.
+      max-failed-attempts: 3
+      lockout-duration: 15m
+
+logging:
+  level:
+    org.testcontainers: WARN
+    com.zaxxer.hikari: WARN
+    org.hibernate.SQL: INFO
