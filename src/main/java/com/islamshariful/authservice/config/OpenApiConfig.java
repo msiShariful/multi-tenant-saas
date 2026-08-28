@@ -46,7 +46,28 @@ public class OpenApiConfig {
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
-                                        .description("Access token from /api/v1/auth/login. Issuer: "
-                                                + jwtProperties.issuer())));
+                                        .description(
+                                                """
+                                                How to get one:
+                                                1. POST /api/v1/tenants — provisions a tenant and its administrator (skip if you already have an account).
+                                                2. POST /api/v1/auth/login — send the tenant slug, email and password.
+                                                3. Copy `accessToken` from the response and paste it below.
+
+                                                Paste the token **only** — Swagger adds the `Bearer ` prefix itself.
+                                                Tokens are valid for %s and are kept across page reloads.
+                                                Issuer: %s
+                                                """
+                                                        .formatted(
+                                                                humanise(jwtProperties.accessTokenTtl()),
+                                                                jwtProperties.issuer()))));
+    }
+
+    /** {@code Duration.toString()} renders ISO-8601 ("PT15M"), which is not what a reader wants in a dialog. */
+    private static String humanise(java.time.Duration duration) {
+        long minutes = duration.toMinutes();
+        if (minutes > 0 && duration.toSecondsPart() == 0) {
+            return minutes == 1 ? "1 minute" : minutes + " minutes";
+        }
+        return duration.toSeconds() + " seconds";
     }
 }

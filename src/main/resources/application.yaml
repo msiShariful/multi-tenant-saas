@@ -84,6 +84,11 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
+    # Keeps the token you pasted into Authorize across page reloads (it is held in the browser's
+    # localStorage, never sent anywhere but this API). Without it, every refresh of the docs page
+    # means logging in and pasting again.
+    persist-authorization: true
+    display-request-duration: true
 
 tenantbase:
   security:
