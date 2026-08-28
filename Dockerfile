@@ -48,4 +48,7 @@ ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -XX:+UseCon
 HEALTHCHECK --interval=15s --timeout=3s --start-period=45s --retries=5 \
     CMD wget -q --spider http://localhost:8081/actuator/health/readiness || exit 1
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
+# JarLauncher, not `java -jar`: `extract --launcher` produces an exploded layout (BOOT-INF/ plus the
+# loader classes) rather than a runnable jar. Launching the exploded form is also what makes the layer
+# split pay off, and it skips the nested-jar indirection at startup.
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
