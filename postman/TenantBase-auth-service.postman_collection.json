@@ -1,0 +1,773 @@
+{
+  "info": {
+    "name": "TenantBase Auth Service",
+    "description": "Multi-tenant authentication, tenant provisioning and RBAC.\n\n**Just press Send.** Collection-level bearer auth reads `{{accessToken}}`, and a pre-request script keeps it valid: it refreshes an expiring token, signs in again if that fails, and registers the tenant first if it does not exist yet. You never copy a token anywhere, and any request works even on an empty database. Open the Postman console to see what it did.\n\nChange `baseUrl` (default `http://localhost:8081`) and the credential variables under the collection's **Variables** tab.\n\nStart the API with `docker compose up --build`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "/*",
+          " * Keeps a valid access token on the collection so nothing is ever pasted by hand.",
+          " *",
+          " *   token still valid          -> nothing",
+          " *   token expiring or missing  -> rotate the refresh token",
+          " *   refresh rejected           -> log in again",
+          " *   tenant not registered yet  -> register it, then log in",
+          " *",
+          " * Public endpoints are skipped so this cannot recurse. Steps are logged to the console.",
+          " */",
+          "const SKIP = ['/actuator', '/.well-known', '/api/v1/tenants',",
+          "              '/api/v1/auth/login', '/api/v1/auth/token/refresh'];",
+          "const path = pm.request.url.getPath();",
+          "const base = pm.collectionVariables.get('baseUrl');",
+          "",
+          "if (SKIP.some((p) => path.startsWith(p))) {",
+          "    // public - nothing to do",
+          "} else if (pm.collectionVariables.get('accessToken') &&",
+          "           Date.now() + 30000 < Number(pm.collectionVariables.get('accessTokenExpiresAt') || 0)) {",
+          "    // still valid - nothing to do",
+          "} else {",
+          "    const store = (b) => {",
+          "        pm.collectionVariables.set('accessToken', b.accessToken);",
+          "        pm.collectionVariables.set('refreshToken', b.refreshToken);",
+          "        pm.collectionVariables.set('accessTokenExpiresAt', Date.now() + b.expiresIn * 1000);",
+          "        const d = (() => { try { return require('atob'); } catch (e) { return atob; } })();",
+          "        const c = JSON.parse(d(b.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+          "        pm.collectionVariables.set('tenantId', c.tenant_id);",
+          "        pm.collectionVariables.set('userId', c.sub);",
+          "    };",
+          "    const post = (url, payload) => ({",
+          "        url: base + url, method: 'POST',",
+          "        header: { 'Content-Type': 'application/json' },",
+          "        body: { mode: 'raw', raw: JSON.stringify(payload) }",
+          "    });",
+          "    const login = (done) => pm.sendRequest(post('/api/v1/auth/login', {",
+          "        tenantSlug: pm.collectionVariables.get('tenantSlug'),",
+          "        email: pm.collectionVariables.get('email'),",
+          "        password: pm.collectionVariables.get('password')",
+          "    }), (e, r) => {",
+          "        if (!e && r.code === 200) { store(r.json()); console.log('[auto] signed in'); return done(true); }",
+          "        done(false);",
+          "    });",
+          "    const register = (done) => pm.sendRequest(post('/api/v1/tenants', {",
+          "        tenantName: pm.collectionVariables.get('tenantName'),",
+          "        tenantSlug: pm.collectionVariables.get('tenantSlug'),",
+          "        adminEmail: pm.collectionVariables.get('email'),",
+          "        adminPassword: pm.collectionVariables.get('password'),",
+          "        firstName: 'Ada', lastName: 'Lovelace'",
+          "    }), () => { console.log('[auto] tenant ready'); done(); });",
+          "",
+          "    const refresh = pm.collectionVariables.get('refreshToken');",
+          "    if (refresh) {",
+          "        pm.sendRequest(post('/api/v1/auth/token/refresh', { refreshToken: refresh }), (e, r) => {",
+          "            if (!e && r.code === 200) { store(r.json()); console.log('[auto] token refreshed'); return; }",
+          "            login((ok) => { if (!ok) register(() => login(() => {})); });",
+          "        });",
+          "    } else {",
+          "        login((ok) => { if (!ok) register(() => login(() => {})); });",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "tenantName",
+      "value": "Acme Corporation",
+      "type": "string"
+    },
+    {
+      "key": "tenantSlug",
+      "value": "acme",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "admin@acme.example",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "correct horse battery staple",
+      "type": "string"
+    },
+    {
+      "key": "altPassword",
+      "value": "a temporary passphrase",
+      "type": "string"
+    },
+    {
+      "key": "memberEmail",
+      "value": "member@acme.example",
+      "type": "string"
+    },
+    {
+      "key": "memberPassword",
+      "value": "a perfectly fine passphrase",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessTokenExpiresAt",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberUserId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Credentials are (tenant slug, email, password) \u2014 email is unique per tenant, not globally.\n\nStores the token pair on the collection, so no other request needs a token pasted into it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "pm.collectionVariables.set('accessTokenExpiresAt', Date.now() + b.expiresIn * 1000);",
+                  "const b64 = (() => { try { return require('atob'); } catch (e) { return atob; } })();",
+                  "const c = JSON.parse(b64(b.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "pm.collectionVariables.set('tenantId', c.tenant_id);",
+                  "pm.collectionVariables.set('userId', c.sub);",
+                  "",
+                  "} else {",
+                  "    // First run against an empty database: the tenant does not exist yet. Register it and retry,",
+                  "    // so Login works on its own instead of having to run Tenant > Register tenant first.",
+                  "    console.log('Login returned ' + pm.response.code + ' - registering the tenant, then retrying.');",
+                  "    const base = pm.collectionVariables.get('baseUrl');",
+                  "    const post = (u, payload) => ({ url: base + u, method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json' },",
+                  "        body: { mode: 'raw', raw: JSON.stringify(payload) } });",
+                  "    pm.sendRequest(post('/api/v1/tenants', {",
+                  "        tenantName: pm.collectionVariables.get('tenantName'),",
+                  "        tenantSlug: pm.collectionVariables.get('tenantSlug'),",
+                  "        adminEmail: pm.collectionVariables.get('email'),",
+                  "        adminPassword: pm.collectionVariables.get('password'),",
+                  "        firstName: 'Ada', lastName: 'Lovelace'",
+                  "    }), () => {",
+                  "        pm.sendRequest(post('/api/v1/auth/login', {",
+                  "            tenantSlug: pm.collectionVariables.get('tenantSlug'),",
+                  "            email: pm.collectionVariables.get('email'),",
+                  "            password: pm.collectionVariables.get('password')",
+                  "        }), (e, r) => {",
+                  "            pm.test('signed in after registering the tenant', () => pm.expect(r.code).to.eql(200));",
+                  "            if (e || r.code !== 200) return;",
+                  "            const b = r.json();",
+                  "            pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "            pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "            pm.collectionVariables.set('accessTokenExpiresAt', Date.now() + b.expiresIn * 1000);",
+                  "            const d = (() => { try { return require('atob'); } catch (x) { return atob; } })();",
+                  "            const c = JSON.parse(d(b.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "            pm.collectionVariables.set('tenantId', c.tenant_id);",
+                  "            pm.collectionVariables.set('userId', c.sub);",
+                  "        });",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('roles are present', () => pm.expect(pm.response.json().roles).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token",
+                "refresh"
+              ]
+            },
+            "description": "Refresh tokens are single use \u2014 the response carries a new one, stored automatically. Replaying a spent token revokes the whole session family.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const previous = pm.collectionVariables.get('refreshToken');",
+                  "pm.test('token was rotated', () =>",
+                  "    pm.expect(pm.response.json().refreshToken).to.not.eql(previous));",
+                  "",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "pm.collectionVariables.set('accessTokenExpiresAt', Date.now() + b.expiresIn * 1000);",
+                  "const b64 = (() => { try { return require('atob'); } catch (e) { return atob; } })();",
+                  "const c = JSON.parse(b64(b.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "pm.collectionVariables.set('tenantId', c.tenant_id);",
+                  "pm.collectionVariables.set('userId', c.sub);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password"
+              ]
+            },
+            "description": "Revokes every refresh token the user holds, so all their devices must sign in again.\n\nThe test script changes it straight back to `{{password}}` afterwards, so the collection is left exactly as it was and this can be re-run any number of times.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{altPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "",
+                  "// Put it back so the stored credentials stay correct.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "const slug = pm.collectionVariables.get('tenantSlug');",
+                  "const email = pm.collectionVariables.get('email');",
+                  "const original = pm.collectionVariables.get('password');",
+                  "const temp = pm.collectionVariables.get('altPassword');",
+                  "const json = (u, p, t) => ({ url: base + u, method: 'POST',",
+                  "    header: Object.assign({ 'Content-Type': 'application/json' }, t ? { Authorization: 'Bearer ' + t } : {}),",
+                  "    body: { mode: 'raw', raw: JSON.stringify(p) } });",
+                  "",
+                  "pm.sendRequest(json('/api/v1/auth/login', { tenantSlug: slug, email: email, password: temp }), (e1, r1) => {",
+                  "    if (e1 || r1.code !== 200) return;",
+                  "    const token = r1.json().accessToken;",
+                  "    pm.sendRequest(json('/api/v1/auth/password',",
+                  "        { currentPassword: temp, newPassword: original }, token), (e2, r2) => {",
+                  "        pm.test('password restored', () => pm.expect(r2.code).to.eql(204));",
+                  "        pm.sendRequest(json('/api/v1/auth/login',",
+                  "            { tenantSlug: slug, email: email, password: original }), (e3, r3) => {",
+                  "            if (e3 || r3.code !== 200) return;",
+                  "            const b = r3.json();",
+                  "            pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "            pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "            pm.collectionVariables.set('accessTokenExpiresAt', Date.now() + b.expiresIn * 1000);",
+                  "        });",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revokes the presented session. Returns 204 whether or not the token existed, so it cannot be used to probe token validity.\n\nThe collection signs back in on the next request automatically.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('accessToken', '');",
+                  "pm.collectionVariables.set('refreshToken', '');",
+                  "pm.collectionVariables.set('accessTokenExpiresAt', '0');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tenant",
+      "item": [
+        {
+          "name": "Register tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tenants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tenants"
+              ]
+            },
+            "description": "The only unauthenticated write. Creates the tenant and its first administrator in one transaction.\n\nRe-running returns 409 \u2014 change `tenantSlug` to create another one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantName\": \"{{tenantName}}\",\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"adminEmail\": \"{{email}}\",\n  \"adminPassword\": \"{{password}}\",\n  \"firstName\": \"Ada\",\n  \"lastName\": \"Lovelace\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created (409 if the slug is taken)', () =>",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
+                  "if (pm.response.code === 201) {",
+                  "    const b = pm.response.json();",
+                  "    pm.collectionVariables.set('tenantId', b.tenant.id);",
+                  "    pm.collectionVariables.set('userId', b.administrator.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "TENANT_ADMIN only. The tenant comes from your token \u2014 there is no tenant field to set.\n\nValid roles: `TENANT_ADMIN`, `TENANT_USER`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\",\n  \"firstName\": \"Grace\",\n  \"lastName\": \"Hopper\",\n  \"roles\": [\n    \"TENANT_USER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created (409 if the email is taken)', () =>",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('memberUserId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paged, and scoped to your tenant automatically."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('paged envelope', () => pm.expect(b).to.have.property('totalElements'));",
+                  "// Remember an id so the next two requests work without editing anything.",
+                  "if (!pm.collectionVariables.get('memberUserId') && b.content.length) {",
+                  "    pm.collectionVariables.set('memberUserId', b.content[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{memberUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{memberUserId}}"
+              ]
+            },
+            "description": "An id from another tenant returns 404 \u2014 from your tenant's point of view the row does not exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update user roles",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{memberUserId}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{memberUserId}}",
+                "roles"
+              ]
+            },
+            "description": "PUT, so the body is the complete desired set. Removing the tenant's last administrator is refused with 409.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"TENANT_USER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWKS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/jwks.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "jwks.json"
+              ]
+            },
+            "description": "Public signing key. Other services point `jwk-set-uri` here and verify tokens locally.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('no private key material', () =>",
+                  "    pm.expect(pm.response.json().keys[0]).to.not.have.property('d'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

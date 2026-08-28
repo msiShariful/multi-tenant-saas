@@ -68,6 +68,30 @@ curl -sX POST localhost:8081/api/v1/auth/token/refresh -H 'Content-Type: applica
 
 ---
 
+## Postman
+
+Import `postman/TenantBase-auth-service.postman_collection.json` and press Send. Four folders —
+**Auth**, **Tenant**, **User**, **System** — and no token to copy anywhere.
+
+Collection-level bearer auth reads `{{accessToken}}`, and a pre-request script keeps it valid:
+it refreshes an expiring token, signs in again if the refresh is rejected, and registers the tenant
+first if it does not exist yet. So any request works on its own, even against an empty database —
+open **User → List users** on a fresh install and it provisions what it needs first. The Postman
+console shows each step.
+
+Credentials and `baseUrl` live on the collection's **Variables** tab.
+
+Every request asserts its status, so **Run collection** also works as a smoke test:
+
+```bash
+newman run postman/TenantBase-auth-service.postman_collection.json
+```
+
+Re-running is safe: existing tenants and users are reused rather than treated as failures, and
+**Change password** puts the password back when it is done.
+
+---
+
 ## Endpoints
 
 | Method | Path | Access | Purpose |
