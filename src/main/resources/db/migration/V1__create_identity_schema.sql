@@ -78,7 +78,7 @@ CREATE TABLE refresh_tokens
     tenant_id      UUID        NOT NULL,
     user_id        UUID        NOT NULL,
     -- SHA-256 hex of the token handed to the client; the plaintext is never persisted.
-    token_hash     CHAR(64)    NOT NULL,
+    token_hash     VARCHAR(64) NOT NULL,
     -- All tokens produced by one login share a family; reuse revokes the family.
     family_id      UUID        NOT NULL,
     expires_at     TIMESTAMPTZ NOT NULL,
