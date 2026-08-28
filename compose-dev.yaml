@@ -14,7 +14,10 @@ services:
       POSTGRES_USER: tenantbase
       POSTGRES_PASSWORD: tenantbase
     ports:
-      - '5432:5432'
+      # Host port is overridable because a locally installed PostgreSQL commonly owns 5432.
+      # Collision? Run: POSTGRES_HOST_PORT=5433 docker compose -f compose-dev.yaml up -d
+      # and point the app at it with DB_URL=jdbc:postgresql://localhost:5433/tenantbase_auth
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
     healthcheck:

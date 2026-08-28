@@ -14,8 +14,10 @@ services:
       POSTGRES_USER: tenantbase
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tenantbase}
     ports:
-      # Exposed for psql and GUI clients. Drop this line for anything but a laptop.
-      - '5432:5432'
+      # Only for psql and GUI clients -- auth-service reaches the database over the compose
+      # network, not through this mapping, so it is safe to change or remove entirely.
+      # A locally installed PostgreSQL usually owns 5432: POSTGRES_HOST_PORT=5433 docker compose up
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
