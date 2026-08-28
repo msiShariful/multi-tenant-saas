@@ -90,6 +90,23 @@ newman run postman/TenantBase-auth-service.postman_collection.json
 Re-running is safe: existing tenants and users are reused rather than treated as failures, and
 **Change password** puts the password back when it is done.
 
+### Demos
+
+`postman/TenantBase-auth-demos.postman_collection.json` is a companion collection where every request
+demonstrates a design decision and asserts it:
+
+| folder | what it shows |
+|---|---|
+| **Tenant isolation** | the same email holding accounts in two tenants, and a valid `TENANT_ADMIN` token getting 404 for a real id in someone else's tenant |
+| **Refresh tokens** | replaying a spent token revoking the whole family; one device logging out while another stays signed in |
+| **Access control** | a member refused an admin endpoint, the last administrator protected, and a role change only taking effect on the next token |
+| **Login protection** | wrong password, unknown email and unknown tenant returning byte-identical bodies; lockout after repeated failures |
+| **Error format** | problem+json for missing credentials, malformed tokens and validation failures |
+
+It provisions whatever a folder needs — a second tenant, an ordinary member, a throwaway account — so any
+request runs on its own against an empty database. Nothing is destructive: demos that revoke a session sign
+back in, the promotion demo demotes again, and the lockout targets a throwaway user rather than yours.
+
 ---
 
 ## Endpoints
