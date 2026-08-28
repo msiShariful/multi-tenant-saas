@@ -15,7 +15,7 @@ public record TenantRegistrationRequest(
                 String tenantName,
         @Schema(
                         description = "URL-safe tenant identifier, supplied at login. Lower-case letters, digits and hyphens.",
-                        example = "acme-corp")
+                        example = "acme")
                 @NotBlank
                 @Size(min = 3, max = 63)
                 @Pattern(
