@@ -51,10 +51,15 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
-		<!-- schema migrations -->
+		<!--
+			Schema migrations. Note the starter rather than a bare org.flywaydb:flyway-core: in Spring Boot 4
+			the Flyway auto-configuration lives in the separate spring-boot-flyway module, which only the
+			starter pulls in. With flyway-core alone the migrations are on the classpath and simply never run,
+			and the first symptom is Hibernate's schema validation failing on a table nobody created.
+		-->
 		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
