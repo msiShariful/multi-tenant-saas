@@ -12,6 +12,9 @@ compose.yaml          whole platform          compose-dev.yaml   infra only, for
 infra/postgres/        one database per service
 auth-service/          port 8081 — tenants, credentials, roles, tokens, JWKS
 user-service/          port 8082 — profiles, provisioned just in time from the token
+frontend/              port 3000 — Next.js 16, acting as its own BFF. Scaffold only; the plan and
+                       the token-handling rationale are in frontend/README.md. Tokens must stay
+                       server-side in an httpOnly cookie, never in localStorage.
 gateway/               port 8080 — not built yet
 ```
 
@@ -23,6 +26,7 @@ Run Maven from inside the service directory, compose from the repo root.
 cd auth-service && ./mvnw test          # 29 integration tests, needs Docker (Testcontainers)
 cd user-service && ./mvnw test          # 17
 cd auth-service && ./mvnw spring-boot:run
+cd frontend      && npm run dev         # :3000, Node >= 20.9
 docker compose up --build               # whole stack
 docker compose -f compose-dev.yaml up -d   # database only
 ```

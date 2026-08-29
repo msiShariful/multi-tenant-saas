@@ -28,6 +28,7 @@ docker compose up --build
 |---|---|---|
 | [**auth-service**](auth-service/) | 8081 | tenants, credentials, roles, token issuance, JWKS |
 | [**user-service**](user-service/) | 8082 | user profiles, provisioned just in time from the token |
+| [frontend](frontend/) | 3000 | Next.js — scaffold only, see its README for the plan |
 | gateway | 8080 | routing, edge rate limiting (planned) |
 
 Each service is an independent Spring Boot application with **its own database**, its own Flyway
@@ -80,8 +81,13 @@ multi-tenant-saas/
 ├── compose-dev.yaml           # infrastructure only, for running a service from the IDE
 ├── infra/postgres/init-db.sql # one database per service
 ├── auth-service/              # own pom, Dockerfile, migrations, tests
-└── user-service/              # same, and a database auth-service cannot reach
+├── user-service/              # same, and a database auth-service cannot reach
+└── frontend/                  # Next.js, acting as a BFF — scaffold only
 ```
+
+The frontend is in this repository for the same reason the services are: the API contract now crosses a
+language boundary, so a change to a response shape is a Java change *and* a TypeScript change. In one
+repository that is one commit and one revert. No compiler catches that mismatch across two.
 
 ### How a profile comes into existence
 
@@ -110,6 +116,8 @@ Each service's own README covers its endpoints, design decisions and known limit
 cd auth-service && ./mvnw test    # 29 tests
 cd user-service && ./mvnw test    # 17 tests
 ```
+
+The frontend has no tests yet — it has no features yet.
 
 Integration tests run against a real PostgreSQL via Testcontainers rather than an in-memory database,
 because the behaviour most worth testing — the tenant predicate Hibernate adds to every statement —
