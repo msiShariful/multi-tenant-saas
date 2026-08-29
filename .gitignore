@@ -24,5 +24,7 @@ infra/keys/
 *.pem
 *.key
 
-### Personal, machine-specific Claude settings ###
+### Claude Code ###
+# Permission grants are a personal trust decision, not a project setting: committing them
+# would auto-approve those commands for anyone who clones, without them opting in.
 .claude/settings.local.json
