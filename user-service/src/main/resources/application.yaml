@@ -59,10 +59,10 @@ spring:
           # issuer must still be rejected here.
           issuer-uri: ${JWT_ISSUER:http://localhost:8081}
           audiences: ${JWT_AUDIENCE:tenantbase-api}
-          # auth-service puts roles in a `roles` claim without the ROLE_ prefix, since the prefix is a
-          # Spring Security implementation detail and the token is consumed by other things too.
-          authorities-claim-name: roles
-          authority-prefix: ROLE_
+          # Roles are mapped by TenantJwtAuthenticationConverter rather than by the declarative
+          # authorities-claim-name/authority-prefix properties: those map authorities but leave the raw
+          # Jwt as the principal, which pushes claim parsing into every controller. A custom converter
+          # set on the filter chain supersedes them, so declaring both would be misleading.
 
 server:
   port: ${SERVER_PORT:8082}

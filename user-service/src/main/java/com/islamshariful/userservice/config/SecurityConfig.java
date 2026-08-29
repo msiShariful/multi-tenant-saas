@@ -1,5 +1,7 @@
 package com.islamshariful.userservice.config;
 
+import com.islamshariful.userservice.security.TenantContextFilter;
+import com.islamshariful.userservice.security.TenantJwtAuthenticationConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -8,6 +10,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
@@ -37,7 +40,11 @@ public class SecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            TenantJwtAuthenticationConverter jwtAuthenticationConverter,
+            TenantContextFilter tenantContextFilter)
+            throws Exception {
         http
                 // No session and no cookie, so there is nothing for a forged cross-site request to ride
                 // on; a bearer token is never attached by the browser automatically.
@@ -53,13 +60,17 @@ public class SecurityConfig {
                         .authenticated())
                 // Signature, issuer and audience are all checked; see the resourceserver block in
                 // application.yaml. This service holds no private key and cannot mint a token.
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(oauth2 ->
+                        oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .headers(headers -> headers
                         .referrerPolicy(referrer ->
                                 referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
                         .contentTypeOptions(Customizer.withDefaults())
                         // HSTS belongs at the edge where TLS terminates, not on a plaintext internal listener.
-                        .httpStrictTransportSecurity(hsts -> hsts.disable()));
+                        .httpStrictTransportSecurity(hsts -> hsts.disable()))
+                // Runs once the bearer token is validated, so the tenant it publishes is one this service
+                // verified rather than one the caller asserted.
+                .addFilterAfter(tenantContextFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }
