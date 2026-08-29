@@ -3,6 +3,7 @@
 #     docker compose up --build
 #
 # auth-service   http://localhost:8081/swagger-ui.html
+# user-service   http://localhost:8082/swagger-ui.html
 # JWKS           http://localhost:8081/.well-known/jwks.json
 #
 # A locally installed PostgreSQL usually owns 5432. If `docker compose up` reports
@@ -62,9 +63,32 @@ services:
       - '8081:8081'
     restart: unless-stopped
 
-  # user-service, rabbitmq and the gateway land here as they are built. Each one gets its own
-  # database from init-db.sql and validates tokens against auth-service's JWKS endpoint --
-  # no shared secret, and no call back to auth-service on the request path.
+  user-service:
+    build:
+      context: ./user-service
+    container_name: tenantbase-user-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        # Only so the JWKS endpoint is reachable on first use. The key is fetched lazily and then
+        # cached, so a later auth-service restart does not take this service down with it.
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/tenantbase_users
+      DB_USERNAME: tenantbase
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-tenantbase}
+      # Reached over the compose network by service name, not through a published port.
+      JWKS_URI: http://auth-service:8081/.well-known/jwks.json
+      # Must match what auth-service stamps into the tokens it signs, or every request is a 401.
+      JWT_ISSUER: ${JWT_ISSUER:-http://localhost:8081}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-tenantbase-api}
+      LOG_LEVEL: INFO
+    ports:
+      - '8082:8082'
+    restart: unless-stopped
+
+  # rabbitmq and the gateway land here as they are built.
 
 volumes:
   postgres-data:
