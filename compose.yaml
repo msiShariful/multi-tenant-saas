@@ -1,8 +1,15 @@
-# The full local stack: `docker compose up --build`.
+# The whole platform, one command:
 #
-# Swagger UI  http://localhost:8081/swagger-ui.html
-# JWKS        http://localhost:8081/.well-known/jwks.json
-# Health      http://localhost:8081/actuator/health
+#     docker compose up --build
+#
+# auth-service   http://localhost:8081/swagger-ui.html
+# JWKS           http://localhost:8081/.well-known/jwks.json
+#
+# A locally installed PostgreSQL usually owns 5432. If `docker compose up` reports
+# "address already in use", publish it somewhere else -- nothing inside the stack depends
+# on the mapping, since the services reach the database over the compose network:
+#
+#     POSTGRES_HOST_PORT=5433 docker compose up --build
 name: tenantbase
 
 services:
@@ -10,16 +17,18 @@ services:
     image: postgres:17-alpine
     container_name: tenantbase-postgres
     environment:
+      # auth-service's database. Every other service's is created by init-db.sql.
       POSTGRES_DB: tenantbase_auth
       POSTGRES_USER: tenantbase
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tenantbase}
     ports:
-      # Only for psql and GUI clients -- auth-service reaches the database over the compose
-      # network, not through this mapping, so it is safe to change or remove entirely.
-      # A locally installed PostgreSQL usually owns 5432: POSTGRES_HOST_PORT=5433 docker compose up
+      # Only for psql and GUI clients; the services do not use it.
       - '${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Runs only on first initialisation of the volume above. `docker compose down -v`
+      # to force it to run again after editing.
+      - ./infra/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tenantbase -d tenantbase_auth']
       interval: 5s
@@ -29,8 +38,7 @@ services:
 
   auth-service:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./auth-service
     container_name: tenantbase-auth-service
     depends_on:
       postgres:
@@ -49,10 +57,14 @@ services:
       # TENANTBASE_SECURITY_JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt/app.pub
       LOG_LEVEL: INFO
     # volumes:
-    #   - ./keys:/run/secrets/jwt:ro
+    #   - ./infra/keys:/run/secrets/jwt:ro
     ports:
       - '8081:8081'
     restart: unless-stopped
+
+  # user-service, rabbitmq and the gateway land here as they are built. Each one gets its own
+  # database from init-db.sql and validates tokens against auth-service's JWKS endpoint --
+  # no shared secret, and no call back to auth-service on the request path.
 
 volumes:
   postgres-data:

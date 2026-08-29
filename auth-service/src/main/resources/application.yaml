@@ -49,8 +49,9 @@ spring:
   docker:
     compose:
       # Development convenience only: `mvn spring-boot:run` starts the database from the infra-only compose
-      # file. compose.yaml runs the whole stack including this service, so pointing at it here would recurse.
-      file: compose-dev.yaml
+      # file at the repository root. The root compose.yaml runs the whole platform including this service,
+      # so pointing at it here would recurse.
+      file: ../compose-dev.yaml
       lifecycle-management: start-only
 
 server:

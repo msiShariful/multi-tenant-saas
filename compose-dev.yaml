@@ -1,8 +1,8 @@
-# Infrastructure only, for running auth-service from the IDE or `./mvnw spring-boot:run`.
-# spring-boot-docker-compose starts this automatically (see spring.docker.compose.file) and
-# leaves it running between restarts.
+# Infrastructure only, for running a service from the IDE or `./mvnw spring-boot:run`.
+# spring-boot-docker-compose starts this automatically (see spring.docker.compose.file in each
+# service) and leaves it running between restarts.
 #
-# For the whole stack in one command, use compose.yaml instead.
+# For the whole platform in one command, use compose.yaml instead.
 name: tenantbase-dev
 
 services:
@@ -20,6 +20,7 @@ services:
       - '${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tenantbase -d tenantbase_auth']
       interval: 5s
