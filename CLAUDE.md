@@ -15,7 +15,8 @@ user-service/          port 8082 — profiles, provisioned just in time from the
 frontend/              port 3000 — Next.js 16, acting as its own BFF. Scaffold only; the plan and
                        the token-handling rationale are in frontend/README.md. Tokens must stay
                        server-side in an httpOnly cookie, never in localStorage.
-gateway/               port 8080 — not built yet
+gateway/               port 8080 — Spring Cloud Gateway 5 (servlet). Routes only; it does NOT
+                       validate tokens, because the services are directly reachable and already do.
 ```
 
 ## Commands
@@ -26,6 +27,7 @@ Run Maven from inside the service directory, compose from the repo root.
 cd auth-service && ./mvnw test          # 29 integration tests, needs Docker (Testcontainers)
 cd user-service && ./mvnw test          # 17
 cd auth-service && ./mvnw spring-boot:run
+cd gateway       && ./mvnw test         # 3
 cd frontend      && npm run dev         # :3000, Node >= 20.9
 docker compose up --build               # whole stack
 docker compose -f compose-dev.yaml up -d   # database only
@@ -116,3 +118,7 @@ document. `TenantIsolationIntegrationTest` is the suite that matters most.
 - Let one service read another's database. Each owns its own, created by `infra/postgres/init-db.sql`.
 - Widen `management.endpoints.web.exposure.include` beyond `health,info`.
 - Return 403 for a cross-tenant id. It is 404 — 403 confirms the row exists.
+- Trust the gateway to have checked anything. It routes; services validate their own tokens.
+- Use `spring.cloud.gateway.routes` (Gateway 5 moved it to `.server.webmvc.routes`) or
+  `spring.web.cors.*` (does not exist). Both bind to nothing and fail silently — the gateway's tests
+  exist to catch exactly that.

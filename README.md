@@ -12,9 +12,10 @@ docker compose up --build
 
 | | |
 |---|---|
+| **the API** | http://localhost:8080 — everything routes through here |
 | auth-service · Swagger UI | http://localhost:8081/swagger-ui.html |
 | user-service · Swagger UI | http://localhost:8082/swagger-ui.html |
-| auth-service · JWKS | http://localhost:8081/.well-known/jwks.json |
+| JWKS | http://localhost:8080/.well-known/jwks.json |
 
 > **`address already in use` on 5432?** A locally installed PostgreSQL usually owns it. Publish it
 > elsewhere — nothing inside the stack depends on the mapping:
@@ -26,10 +27,10 @@ docker compose up --build
 
 | | port | what it owns |
 |---|---|---|
+| [**gateway**](gateway/) | 8080 | one address for the API — routing and CORS |
 | [**auth-service**](auth-service/) | 8081 | tenants, credentials, roles, token issuance, JWKS |
 | [**user-service**](user-service/) | 8082 | user profiles, provisioned just in time from the token |
 | [frontend](frontend/) | 3000 | Next.js — scaffold only, see its README for the plan |
-| gateway | 8080 | routing, edge rate limiting (planned) |
 
 Each service is an independent Spring Boot application with **its own database**, its own Flyway
 migrations, and its own Dockerfile. They are deployed separately and share no schema.
@@ -68,6 +69,11 @@ distributed monolith actually gets built.
 needs to verify. A shared HMAC secret would give both powers to every holder, so any service that leaked
 its configuration could forge an administrator token for any tenant.
 
+**The gateway does not validate tokens; the services do.** The services are directly reachable, so a
+gateway that were the only thing checking would make its bypass a full compromise. It routes, applies
+CORS, and keeps the topology private — and each service independently verifies signature, issuer and
+audience against auth-service's published key.
+
 **Every access token carries a `tenant_id` claim**, and each service scopes its own queries to it. In
 auth-service that scoping is applied by Hibernate's `@TenantId` in the entity mapping, not by predicates
 a developer has to remember — so a query written without a tenant filter still cannot read across
@@ -80,6 +86,7 @@ multi-tenant-saas/
 ├── compose.yaml               # the whole platform
 ├── compose-dev.yaml           # infrastructure only, for running a service from the IDE
 ├── infra/postgres/init-db.sql # one database per service
+├── gateway/                   # the edge — routing and CORS
 ├── auth-service/              # own pom, Dockerfile, migrations, tests
 ├── user-service/              # same, and a database auth-service cannot reach
 └── frontend/                  # Next.js, acting as a BFF — scaffold only
@@ -115,6 +122,7 @@ Each service's own README covers its endpoints, design decisions and known limit
 ```bash
 cd auth-service && ./mvnw test    # 29 tests
 cd user-service && ./mvnw test    # 17 tests
+cd gateway      && ./mvnw test    # 3  tests
 ```
 
 The frontend has no tests yet — it has no features yet.
