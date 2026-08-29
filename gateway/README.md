@@ -89,12 +89,24 @@ Combined predicate for route profiles - /api/v1/profiles/**
 which answers what the gateway actually parsed, as opposed to what the YAML looks like — usually the
 cause of an unexpected 404.
 
+## What this is, and is not
+
+It is a router with a CORS policy: three routes, zero filters. Spring Cloud Gateway is a full API
+gateway framework — it ships circuit breaking, retries, rate limiting, load balancing and request
+rewriting — and none of that is configured here. Calling it an "API gateway" in the sense Kong means
+would be overselling it until the list below is worked through.
+
+What it does provide today is real, if modest: one entry point, topology hiding, and a single place
+where the browser policy lives.
+
 ## Not done yet
 
 - **Rate limiting.** The obvious next addition, and the reason to have an edge at all beyond routing.
-  Spring Cloud Gateway's `RequestRateLimiter` ships a Redis-backed implementation, so this means adding
-  Redis to compose. Per-tenant and per-IP keys both matter: per-IP protects the login endpoint from
-  credential stuffing, per-tenant stops one customer starving the others.
+  The servlet gateway ships `Bucket4jFilterFunctions`, which holds buckets **in memory** — no Redis
+  needed for a single instance; Redis or Hazelcast is only required to share buckets across replicas.
+  Per-IP and per-tenant keys both matter: per-IP protects login from credential stuffing across many
+  accounts, which auth-service's per-account lockout does nothing about; per-tenant stops one customer
+  starving the others.
 - **Request size caps and timeouts** — cheap, no new infrastructure, and currently absent.
 - **No service discovery.** Service addresses are configuration. Eureka or Kubernetes DNS is what
   replaces that, and neither is worth it for two fixed services.
