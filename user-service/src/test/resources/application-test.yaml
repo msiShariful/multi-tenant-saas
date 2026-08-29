@@ -1,0 +1,20 @@
+spring:
+  docker:
+    compose:
+      # Tests bring their own PostgreSQL via Testcontainers; without this,
+      # spring-boot-docker-compose would also try to start compose-dev.yaml.
+      enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Tests must not depend on auth-service being up. A local key is used instead; the
+          # integration tests that need a real token mint one with the matching private key.
+          jwk-set-uri: http://localhost:8081/.well-known/jwks.json
+          issuer-uri: http://auth-service.test
+          audiences: tenantbase-api-test
+
+logging:
+  level:
+    org.testcontainers: WARN
+    com.zaxxer.hikari: WARN
