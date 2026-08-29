@@ -1,3 +1,100 @@
 spring:
   application:
     name: user-service
+
+  datasource:
+    # Its own database. user-service cannot read a password hash and auth-service cannot read a
+    # profile, because neither is given a connection to the other's data. Created by
+    # infra/postgres/init-db.sql.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tenantbase_users}
+    username: ${DB_USERNAME:tenantbase}
+    password: ${DB_PASSWORD:tenantbase}
+    hikari:
+      pool-name: user-service-pool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+      # Hikari takes raw milliseconds here, not a Spring Duration.
+      connection-timeout: 10000
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema; validate makes drift between entities and migrations fail at startup.
+      ddl-auto: validate
+    # Off deliberately: open-session-in-view holds a connection for the whole request, and would bind a
+    # persistence context to the thread before the tenant could be established on it.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 25
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+  threads:
+    virtual:
+      enabled: true
+
+  docker:
+    compose:
+      # The compose files live at the repository root, one level up from this service.
+      file: ../compose-dev.yaml
+      lifecycle-management: start-only
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # This service verifies tokens; it never issues them. The public key is fetched from
+          # auth-service once and cached, so verification is local and auth-service is not on the
+          # request path. Nothing here can mint a token, which is the point of signing with RSA
+          # rather than a secret both services would have to hold.
+          jwk-set-uri: ${JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          # Signature alone is not enough: a token this platform signed for a different audience or
+          # issuer must still be rejected here.
+          issuer-uri: ${JWT_ISSUER:http://localhost:8081}
+          audiences: ${JWT_AUDIENCE:tenantbase-api}
+          # auth-service puts roles in a `roles` claim without the ROLE_ prefix, since the prefix is a
+          # Spring Security implementation detail and the token is consumed by other things too.
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+
+server:
+  port: ${SERVER_PORT:8082}
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    persist-authorization: true
+    display-request-duration: true
+
+logging:
+  level:
+    root: INFO
+    com.islamshariful.userservice: ${LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{tenantId:-no-tenant}/%X{userId:-anonymous}] %logger{36} - %msg%n"
