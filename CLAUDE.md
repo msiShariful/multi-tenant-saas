@@ -10,8 +10,9 @@ them. Say so plainly when something would not pass a senior code review.
 ```
 compose.yaml          whole platform          compose-dev.yaml   infra only, for IDE work
 infra/postgres/        one database per service
-auth-service/          port 8081 — tenants, credentials, roles, tokens, JWKS  (complete)
-user-service/          port 8082 — profiles                                    (not built yet)
+auth-service/          port 8081 — tenants, credentials, roles, tokens, JWKS
+user-service/          port 8082 — profiles, provisioned just in time from the token
+gateway/               port 8080 — not built yet
 ```
 
 ## Commands
@@ -20,6 +21,7 @@ Run Maven from inside the service directory, compose from the repo root.
 
 ```bash
 cd auth-service && ./mvnw test          # 29 integration tests, needs Docker (Testcontainers)
+cd user-service && ./mvnw test          # 17
 cd auth-service && ./mvnw spring-boot:run
 docker compose up --build               # whole stack
 docker compose -f compose-dev.yaml up -d   # database only
@@ -54,6 +56,14 @@ of a select-then-insert.
 **`@TenantId` goes on tenant-scoped entities only.** `Tenant` is the registry and must be readable
 before any tenant context exists. `RefreshToken` is looked up by its secret on a public endpoint before
 a tenant is known — its `tenantId` is a plain column read *from* the row.
+
+**user-service needs no `TenantScope`, and that is deliberate.** Its tenant arrives already validated
+in the token and `TenantContextFilter` publishes it before any transaction opens, so the ordering is
+correct by construction. Do not "port it for consistency" — it would be dead machinery.
+
+**A profile's primary key is the auth-service user id.** One profile per user is structural, not a
+rule. There is no foreign key to `users` because it is in another service's database; the signed token
+is the integrity guarantee, and orphans are a known consequence awaiting the event consumer.
 
 **Login must not throw inside its own transaction.** `attemptLogin` returns the failure instead, and
 the caller re-throws after commit. Throwing would roll back the failed-attempt counter and the lockout

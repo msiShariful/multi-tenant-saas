@@ -13,6 +13,7 @@ docker compose up --build
 | | |
 |---|---|
 | auth-service · Swagger UI | http://localhost:8081/swagger-ui.html |
+| user-service · Swagger UI | http://localhost:8082/swagger-ui.html |
 | auth-service · JWKS | http://localhost:8081/.well-known/jwks.json |
 
 > **`address already in use` on 5432?** A locally installed PostgreSQL usually owns it. Publish it
@@ -26,7 +27,7 @@ docker compose up --build
 | | port | what it owns |
 |---|---|---|
 | [**auth-service**](auth-service/) | 8081 | tenants, credentials, roles, token issuance, JWKS |
-| user-service | 8082 | user profiles (planned) |
+| [**user-service**](user-service/) | 8082 | user profiles, provisioned just in time from the token |
 | gateway | 8080 | routing, edge rate limiting (planned) |
 
 Each service is an independent Spring Boot application with **its own database**, its own Flyway
@@ -74,12 +75,24 @@ tenants. An id from another tenant reads as `404`, never `403`.
 ## Repository layout
 
 ```
-tenantbase/
-├── compose.yaml              # the whole platform
-├── compose-dev.yaml          # infrastructure only, for running a service from the IDE
+multi-tenant-saas/
+├── compose.yaml               # the whole platform
+├── compose-dev.yaml           # infrastructure only, for running a service from the IDE
 ├── infra/postgres/init-db.sql # one database per service
-└── auth-service/             # own pom, Dockerfile, migrations, tests, Postman collections
+├── auth-service/              # own pom, Dockerfile, migrations, tests, Postman collections
+└── user-service/              # same, and a database auth-service cannot reach
 ```
+
+### How a profile comes into existence
+
+Users are created in auth-service, which cannot reach user-service's database. Rather than a
+synchronous call on registration — which would couple the two and make sign-up fail whenever
+user-service is down — a profile is materialised **on first access** from the claims of the token the
+caller already holds. The signature makes that safe: it is auth-service asserting that this user exists,
+in this tenant, with this email.
+
+When RabbitMQ arrives, a `UserCreated` consumer provisions the row earlier and the just-in-time path
+becomes the fallback it already is. No endpoint changes.
 
 ## Working on one service
 
@@ -88,13 +101,14 @@ POSTGRES_HOST_PORT=5433 docker compose -f compose-dev.yaml up -d   # database on
 cd auth-service && ./mvnw spring-boot:run
 ```
 
-Each service's own README covers its endpoints, design decisions and known limits. Start with
-[auth-service](auth-service/README.md) — it is the one that is finished.
+Each service's own README covers its endpoints, design decisions and known limits:
+[auth-service](auth-service/README.md), [user-service](user-service/README.md).
 
 ## Tests
 
 ```bash
-cd auth-service && ./mvnw test
+cd auth-service && ./mvnw test    # 29 tests
+cd user-service && ./mvnw test    # 17 tests
 ```
 
 Integration tests run against a real PostgreSQL via Testcontainers rather than an in-memory database,
