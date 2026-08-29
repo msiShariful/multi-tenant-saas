@@ -1,5 +1,15 @@
 import "server-only";
 
+/**
+ * Calls auth-service's endpoints, but addresses them through the gateway rather than the service
+ * directly: the platform has one entry point, and the BFF should not need to know which service
+ * owns which path or what port it listens on. The gateway preserves the path (no StripPrefix), so
+ * /api/v1/auth/login is the same URL on :8080 as it is on :8081.
+ *
+ * This buys the BFF nothing security-wise and is not meant to -- the gateway routes and does not
+ * validate. Every service still checks its own tokens.
+ */
+
 /** The subset of auth-service's RFC 9457 ApiError this app reads. */
 type ApiError = {
   code?: string;
@@ -21,7 +31,7 @@ export type LoginResult =
   | { ok: false; message: string };
 
 function baseUrl(): string {
-  return process.env.AUTH_SERVICE_URL ?? "http://localhost:8081";
+  return process.env.GATEWAY_URL ?? "http://localhost:8080";
 }
 
 /**
@@ -67,7 +77,9 @@ export async function login(
     // user can do something about one of these and nothing about the other.
     return {
       ok: false,
-      message: "Cannot reach the authentication service. Is auth-service running on :8081?",
+      // Names the gateway, because that is the address this app actually dialled -- pointing the
+      // reader at auth-service would send them to debug a service that may be perfectly healthy.
+      message: "Cannot reach the API gateway. Is the gateway running on :8080?",
     };
   }
 

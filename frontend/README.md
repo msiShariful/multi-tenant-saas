@@ -19,6 +19,7 @@ The backend is not required to boot the UI, but is required for anything to work
 POSTGRES_HOST_PORT=5433 docker compose -f compose-dev.yaml up -d
 cd auth-service && ./mvnw spring-boot:run    # :8081
 cd user-service && ./mvnw spring-boot:run    # :8082
+cd gateway      && ./mvnw spring-boot:run    # :8080 — the only one this app calls
 ```
 
 ---
@@ -29,15 +30,18 @@ A **Backend For Frontend** is a server layer belonging to one specific client, s
 the services. With Next.js you do not build one — the App Router's Route Handlers already run on the
 server, so the layer exists in the app you were going to write anyway.
 
-The browser talks only to Next.js. Next.js talks to the services.
+The browser talks only to Next.js. Next.js talks to the gateway.
 
 ```
-                     ┌──────────────────────────────┐
-  browser ──────────▶│  Next.js  (this app)         │
-   httpOnly cookie   │  ─ Route Handlers            │──Bearer──▶ auth-service :8081
-   no tokens in JS   │  ─ holds the token pair      │──Bearer──▶ user-service :8082
+                     ┌──────────────────────────────┐                       ┌── auth-service :8081
+  browser ──────────▶│  Next.js  (this app)         │──Bearer──▶ gateway ───┤
+   httpOnly cookie   │  ─ Route Handlers            │            :8080      └── user-service :8082
+   no tokens in JS   │  ─ holds the token pair      │
                      └──────────────────────────────┘
 ```
+
+One `GATEWAY_URL` is the whole backend as far as this app is concerned. Which service owns which
+path is the gateway's business, and stays out of the frontend's configuration.
 
 ### Why not just keep tokens in the browser
 
@@ -63,14 +67,16 @@ The obvious approach is to call `auth-service` directly from the browser and put
 - **Service topology stays private.** The browser learns one origin. Ports, service names and the split
   between auth-service and user-service are not public API.
 
-### Not the same thing as the planned gateway
+### Not the same thing as the gateway
 
 | | |
 |---|---|
-| **Spring Cloud Gateway** (roadmap) | infrastructure edge for *all* clients — routing, rate limiting, TLS |
+| **Spring Cloud Gateway** (`gateway/`, :8080) | infrastructure edge for *all* clients — routing today, rate limiting and TLS later |
 | **BFF** (this app) | application layer for *one* client, shaped to what this UI needs |
 
-They coexist; the BFF calls through the gateway once it exists.
+They coexist, and the BFF now calls through the gateway. That is a topology decision, not a security
+one: the gateway routes and deliberately does not validate tokens, so nothing downstream may assume
+a request arriving through it was checked. Each service still verifies the token itself.
 
 ---
 
