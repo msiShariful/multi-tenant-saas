@@ -71,47 +71,6 @@ curl -sX POST localhost:8081/api/v1/auth/token/refresh -H 'Content-Type: applica
 
 ---
 
-## Postman
-
-Import `auth-service/postman/TenantBase-auth-service.postman_collection.json` and press Send. Four folders —
-**Auth**, **Tenant**, **User**, **System** — and no token to copy anywhere.
-
-Collection-level bearer auth reads `{{accessToken}}`, and a pre-request script keeps it valid:
-it refreshes an expiring token, signs in again if the refresh is rejected, and registers the tenant
-first if it does not exist yet. So any request works on its own, even against an empty database —
-open **User → List users** on a fresh install and it provisions what it needs first. The Postman
-console shows each step.
-
-Credentials and `baseUrl` live on the collection's **Variables** tab.
-
-Every request asserts its status, so **Run collection** also works as a smoke test:
-
-```bash
-newman run auth-service/postman/TenantBase-auth-service.postman_collection.json
-```
-
-Re-running is safe: existing tenants and users are reused rather than treated as failures, and
-**Change password** puts the password back when it is done.
-
-### Demos
-
-`auth-service/postman/TenantBase-auth-demos.postman_collection.json` is a companion collection where every request
-demonstrates a design decision and asserts it:
-
-| folder | what it shows |
-|---|---|
-| **Tenant isolation** | the same email holding accounts in two tenants, and a valid `TENANT_ADMIN` token getting 404 for a real id in someone else's tenant |
-| **Refresh tokens** | replaying a spent token revoking the whole family; one device logging out while another stays signed in |
-| **Access control** | a member refused an admin endpoint, the last administrator protected, and a role change only taking effect on the next token |
-| **Login protection** | wrong password, unknown email and unknown tenant returning byte-identical bodies; lockout after repeated failures |
-| **Error format** | problem+json for missing credentials, malformed tokens and validation failures |
-
-It provisions whatever a folder needs — a second tenant, an ordinary member, a throwaway account — so any
-request runs on its own against an empty database. Nothing is destructive: demos that revoke a session sign
-back in, the promotion demo demotes again, and the lockout targets a throwaway user rather than yours.
-
----
-
 ## Endpoints
 
 | Method | Path | Access | Purpose |

@@ -79,7 +79,7 @@ multi-tenant-saas/
 ├── compose.yaml               # the whole platform
 ├── compose-dev.yaml           # infrastructure only, for running a service from the IDE
 ├── infra/postgres/init-db.sql # one database per service
-├── auth-service/              # own pom, Dockerfile, migrations, tests, Postman collections
+├── auth-service/              # own pom, Dockerfile, migrations, tests
 └── user-service/              # same, and a database auth-service cannot reach
 ```
 
