@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: gateway
+
+  cloud:
+    gateway:
+      server:
+        # Note the prefix. Spring Cloud Gateway 5 moved routes under `server.webmvc`; the older
+        # `spring.cloud.gateway.routes` binds to nothing and fails silently -- no routes, no error.
+        webmvc:
+          routes:
+            # ---- auth-service -------------------------------------------------------------
+            # Identity lives entirely in auth-service, including /api/v1/users. That is user
+            # *administration* -- credentials, status and role assignment -- and is not the same
+            # thing as /api/v1/profiles, which is user-service. The names are close enough to be
+            # worth stating; routing them to the wrong service produces confusing 404s.
+            - id: auth
+              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/tenants/**,/api/v1/users/**
+
+            # The public key set. Routed so a client that only knows the gateway can still verify
+            # tokens offline without being told auth-service's address.
+            - id: auth-jwks
+              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
+              predicates:
+                - Path=/.well-known/jwks.json
+
+            # ---- user-service -------------------------------------------------------------
+            - id: profiles
+              uri: ${USER_SERVICE_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/profiles/**
+
+
+server:
+  port: ${SERVER_PORT:8080}
+  # The gateway is the first thing a real deployment terminates TLS in front of, so it is where the
+  # client's true address enters the system. Services downstream read it from the headers it sets.
+  forward-headers-strategy: framework
+
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # No `gateway` endpoint here: the servlet gateway ships no actuator endpoint, unlike the
+        # reactive one, so /actuator/gateway/routes does not exist. To see why a path is not
+        # matching, raise the gateway log level below -- it logs the route it selected per request.
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+tenantbase:
+  gateway:
+    # Applied by CorsConfig. Spring Cloud Gateway's servlet variant publishes no CORS property keys,
+    # and `spring.web.cors.*` does not exist -- a config block there binds to nothing and the
+    # preflight is silently never answered.
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allow-credentials: true
+
+logging:
+  level:
+    root: INFO
+    com.islamshariful.gateway: ${LOG_LEVEL:INFO}
+    # GATEWAY_LOG_LEVEL=TRACE prints the parsed route table and each route's combined predicate at
+    # startup -- "Combined predicate for route profiles - /api/v1/profiles/**". That answers the
+    # question an actuator endpoint would ("what did the gateway actually parse, as opposed to what
+    # does the YAML look like"), which is the usual cause of an unexpected 404.
+    org.springframework.cloud.gateway: ${GATEWAY_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [gateway] %logger{36} - %msg%n"

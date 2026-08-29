@@ -2,9 +2,14 @@
 #
 #     docker compose up --build
 #
+# gateway        http://localhost:8080   — one address for the whole API
 # auth-service   http://localhost:8081/swagger-ui.html
 # user-service   http://localhost:8082/swagger-ui.html
-# JWKS           http://localhost:8081/.well-known/jwks.json
+# JWKS           http://localhost:8080/.well-known/jwks.json (via the gateway)
+#
+# The service ports stay published so the Swagger pages remain reachable and so the isolation
+# story is honest: services are directly addressable here, which is exactly why each validates
+# its own tokens rather than trusting the gateway to have done it.
 #
 # A locally installed PostgreSQL usually owns 5432. If `docker compose up` reports
 # "address already in use", publish it somewhere else -- nothing inside the stack depends
@@ -88,7 +93,29 @@ services:
       - '8082:8082'
     restart: unless-stopped
 
-  # rabbitmq and the gateway land here as they are built.
+  gateway:
+    build:
+      context: ./gateway
+    container_name: tenantbase-gateway
+    depends_on:
+      # Only so the services are reachable when traffic starts arriving. The gateway holds no state
+      # and starts fine without them; requests would simply 502 until they are up.
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    environment:
+      # Service names on the compose network, not published ports. The gateway is the only thing
+      # that needs to know where the services live.
+      AUTH_SERVICE_URI: http://auth-service:8081
+      USER_SERVICE_URI: http://user-service:8082
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      LOG_LEVEL: INFO
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+
+  # rabbitmq lands here when it is built.
 
 volumes:
   postgres-data:
