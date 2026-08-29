@@ -23,3 +23,6 @@ build/
 infra/keys/
 *.pem
 *.key
+
+### Personal, machine-specific Claude settings ###
+.claude/settings.local.json
