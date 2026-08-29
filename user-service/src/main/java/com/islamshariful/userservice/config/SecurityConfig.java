@@ -43,7 +43,9 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             TenantJwtAuthenticationConverter jwtAuthenticationConverter,
-            TenantContextFilter tenantContextFilter)
+            TenantContextFilter tenantContextFilter,
+            org.springframework.security.web.AuthenticationEntryPoint problemDetailAuthenticationEntryPoint,
+            org.springframework.security.web.access.AccessDeniedHandler problemDetailAccessDeniedHandler)
             throws Exception {
         http
                 // No session and no cookie, so there is nothing for a forged cross-site request to ride
@@ -60,8 +62,15 @@ public class SecurityConfig {
                         .authenticated())
                 // Signature, issuer and audience are all checked; see the resourceserver block in
                 // application.yaml. This service holds no private key and cannot mint a token.
-                .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+                        .authenticationEntryPoint(problemDetailAuthenticationEntryPoint)
+                        .accessDeniedHandler(problemDetailAccessDeniedHandler))
+                // Also outside oauth2ResourceServer: that covers bearer-token failures, this covers
+                // everything else -- no credentials at all, and method-security denials.
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(problemDetailAuthenticationEntryPoint)
+                        .accessDeniedHandler(problemDetailAccessDeniedHandler))
                 .headers(headers -> headers
                         .referrerPolicy(referrer ->
                                 referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
